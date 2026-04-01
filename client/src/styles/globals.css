@@ -1,5 +1,5 @@
 @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Sora:wght@300;400;500;600&display=swap');
-@import 'highlight.js/styles/tokyo-night-dark.css';
+@import 'highlight.js/styles/vs2015.css';
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -555,8 +555,8 @@ html, body, #root { height: 100%; overflow: hidden; background: var(--bg); color
 .preview h3 { font-size: 1.1em; }
 .preview p { color: var(--text2); margin: .7em 0; line-height: 1.8; }
 .preview code { background: var(--bg3); color: var(--accent3); padding: 2px 6px; border-radius: 4px; font-family: var(--font); font-size: .88em; }
-.preview pre { position: relative; padding: 0; background: var(--bg3); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; margin: 1.2em 0; }
-.preview pre code.hljs { padding: 16px 18px; font-size: 13px; line-height: 1.65; display: block; overflow-x: auto; background: var(--bg3) !important; }
+.preview pre { position: relative; padding: 0; background: #1e1e1e; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; margin: 1.2em 0; }
+.preview pre code.hljs { padding: 16px 18px; font-size: 13px; line-height: 1.65; display: block; overflow-x: auto; background: #1e1e1e !important; }
 .preview blockquote { border-left: 2px solid var(--accent); padding-left: 16px; margin: 1em 0; color: var(--text3); }
 .preview ul, .preview ol { color: var(--text2); padding-left: 1.5em; margin: .6em 0; }
 .preview li { margin: .3em 0; }
@@ -574,21 +574,39 @@ html, body, #root { height: 100%; overflow: hidden; background: var(--bg); color
 .code-copy:hover { background: var(--bg3); color: var(--text); border-color: var(--accent); }
 .code-copy.copied { color: var(--green); border-color: var(--green); }
 
-/* Highlight.js overrides */
-.preview .hljs-keyword    { color: #bb9af7; }
-.preview .hljs-built_in   { color: #7dcfff; }
-.preview .hljs-string     { color: #9ece6a; }
-.preview .hljs-number     { color: #ff9e64; }
-.preview .hljs-comment    { color: #565f89; font-style: italic; }
-.preview .hljs-title      { color: #7aa2f7; }
-.preview .hljs-params     { color: #e0af68; }
-.preview .hljs-attr       { color: #73daca; }
-.preview .hljs-literal    { color: #ff9e64; }
-.preview .hljs-operator   { color: #89ddff; }
-.preview .hljs-punctuation{ color: #89ddff; }
-.preview .hljs-property   { color: #73daca; }
-.preview .hljs-tag        { color: #f7768e; }
-.preview .hljs-variable   { color: #c0caf5; }
+/* ── VS Code Dark+ token colors ─────────────────────────────────────── */
+.preview .hljs                      { background: #1e1e1e !important; color: #d4d4d4; }
+.preview .hljs-keyword              { color: #569cd6; }
+.preview .hljs-keyword.hljs-control { color: #c586c0; }
+.preview .hljs-built_in             { color: #4ec9b0; }
+.preview .hljs-string               { color: #ce9178; }
+.preview .hljs-subst                { color: #d4d4d4; }
+.preview .hljs-number               { color: #b5cea8; }
+.preview .hljs-literal              { color: #569cd6; }
+.preview .hljs-comment              { color: #6a9955; font-style: italic; }
+.preview .hljs-title                { color: #dcdcaa; }
+.preview .hljs-title.class_         { color: #4ec9b0; }
+.preview .hljs-title.function_      { color: #dcdcaa; }
+.preview .hljs-params               { color: #9cdcfe; }
+.preview .hljs-variable             { color: #9cdcfe; }
+.preview .hljs-variable.language_   { color: #569cd6; }
+.preview .hljs-property             { color: #9cdcfe; }
+.preview .hljs-attr                 { color: #9cdcfe; }
+.preview .hljs-type                 { color: #4ec9b0; }
+.preview .hljs-operator             { color: #d4d4d4; }
+.preview .hljs-punctuation          { color: #d4d4d4; }
+.preview .hljs-regexp               { color: #d16969; }
+.preview .hljs-meta                 { color: #dcdcaa; }
+.preview .hljs-meta .hljs-string    { color: #ce9178; }
+.preview .hljs-tag                  { color: #808080; }
+.preview .hljs-name                 { color: #569cd6; }
+.preview .hljs-selector-tag         { color: #d7ba7d; }
+.preview .hljs-selector-class       { color: #d7ba7d; }
+.preview .hljs-selector-id          { color: #d7ba7d; }
+.preview .hljs-attribute            { color: #9cdcfe; }
+.preview .hljs-section              { color: #569cd6; font-weight: 600; }
+.preview .hljs-deletion             { color: #f44747; }
+.preview .hljs-addition             { color: #b5cea8; }
 
 /* ── Empty state ────────────────────────────────────────────────────── */
 .empty-state {
@@ -868,4 +886,4 @@ textarea:focus:not(:focus-visible) { outline: none; }
   .editor-area { overflow: visible; }
   .preview { display: block !important; padding: 0; }
   .editor  { display: block !important; overflow: visible; }
-}
+} 
