@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, memo } from 'react';
 
 function getFileIcon(title = '') {
   const name = title.toLowerCase();
@@ -38,7 +38,7 @@ function InlineRename({ value, onSave, onCancel }) {
   );
 }
 
-function TreeItem({ item, depth, state, activeFileId, onOpenFile, onToggleFolder, onContextMenu, onDragStart, onDragOver, onDrop, dragId, onRenameInline, onDeleteItem, searchQuery }) {
+const TreeItem = memo(function TreeItem({ item, depth, state, activeFileId, onOpenFile, onToggleFolder, onContextMenu, onDragStart, onDragOver, onDrop, dragId, onRenameInline, onDeleteItem, searchQuery }) {
   const [renamingInline, setRenamingInline] = useState(false);
   const [dragOver, setDragOver] = useState(false);
 
@@ -126,9 +126,9 @@ function TreeItem({ item, depth, state, activeFileId, onOpenFile, onToggleFolder
       </div>
     </div>
   );
-}
+});
 
-export default function FileTree({ state, activeFileId, onOpenFile, onToggleFolder, onContextMenu, onDragStart, onDragOver, onDrop, dragId, onRenameInline, onDeleteItem, searchQuery }) {
+const FileTree = memo(function FileTree({ state, activeFileId, onOpenFile, onToggleFolder, onContextMenu, onDragStart, onDragOver, onDrop, dragId, onRenameInline, onDeleteItem, searchQuery }) {
   const checkFolderMatch = (fid) => {
     const folder = state.folders[fid];
     if (!folder) return false;

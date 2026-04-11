@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback, useEffect } from 'react';
+import React, { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useNotes } from '../hooks/useNotes';
 import FileTree from './FileTree';
@@ -46,10 +46,12 @@ export default function NotemarkApp() {
     setFileTitleValue(f.title || 'Untitled');
   }, [activeFileId, state.files]);
 
-  // Stats
-  const words = editorValue.trim() ? editorValue.trim().split(/\s+/).length : 0;
-  const chars  = editorValue.length;
-  const lines  = editorValue.split('\n').length;
+  // Stats — memoised so these don't recompute on every unrelated state change
+  const { words, chars, lines } = useMemo(() => ({
+    words: editorValue.trim() ? editorValue.trim().split(/\s+/).length : 0,
+    chars: editorValue.length,
+    lines: editorValue.split('\n').length,
+  }), [editorValue]);
 
   // Keyboard shortcuts — use ref so handler never goes stale
   useEffect(() => {
@@ -63,8 +65,8 @@ export default function NotemarkApp() {
     return () => document.removeEventListener('keydown', handler);
   }, []); // runs once — stable via ref
 
-  // Breadcrumbs
-  const getBreadcrumbs = () => {
+  // Breadcrumbs — memoised to avoid recomputation on every render
+  const crumbs = useMemo(() => {
     if (!activeFileId || !state.files[activeFileId]) return [];
     const path = [];
     let pid = state.files[activeFileId].parentFolder;
@@ -73,8 +75,8 @@ export default function NotemarkApp() {
       pid = state.folders[pid].parentFolder;
     }
     return path;
-  };
-
+  }, [activeFileId, state.files, state.folders]);
+    const path = [];
   // Modal
   const promptModal = (title, placeholder, okLabel = 'Create') =>
     new Promise((resolve) => setModal({ show: true, title, placeholder, okLabel, resolve }));
@@ -168,7 +170,6 @@ export default function NotemarkApp() {
   }
 
   const activeFile = activeFileId ? state.files[activeFileId] : null;
-  const crumbs     = getBreadcrumbs();
 
   const syncLabel =
     syncStatus === 'saving' ? 'saving…' :

@@ -17,15 +17,27 @@ export function useNotes() {
   const activeFileIdRef = useRef(activeFileId);
   useEffect(() => { activeFileIdRef.current = activeFileId; }, [activeFileId]);
 
+  // ── Dirty-check ref ──────────────────────────────────────────────────────
+  // We serialise the last successfully saved payload and compare before each
+  // save. If nothing changed (e.g. user opened a file but didn't type), we
+  // skip the network round-trip entirely.
+  const lastSavedRef = useRef(null);
+
   // ── Load state on mount ──────────────────────────────────────────────────
   useEffect(() => {
-    // Supabase session is managed internally — no token prop needed
     let cancelled = false;
     notesApi.getState()
       .then((data) => {
         if (cancelled) return;
-        setState({ files: data.files || {}, folders: data.folders || {}, root: data.root || [] });
-        setActiveFileId(data.activeFileId || null);
+        const files   = data.files   || {};
+        const folders = data.folders || {};
+        const root    = data.root    || [];
+        const afId    = data.activeFileId || null;
+        setState({ files, folders, root });
+        setActiveFileId(afId);
+        // Seed the dirty-check so the first auto-save (e.g. just opening a
+        // file) is skipped when nothing was actually modified.
+        lastSavedRef.current = JSON.stringify({ files, folders, root, activeFileId: afId });
       })
       .catch((err) => { if (!cancelled) console.error('Failed to load notes:', err); })
       .finally(() => { if (!cancelled) setLoading(false); });
@@ -46,8 +58,17 @@ export function useNotes() {
       const pending = pendingStateRef.current;
       if (!pending) return;
       pendingStateRef.current = null;
+
+      // ── Dirty check ── skip network call if payload is unchanged
+      const serial = JSON.stringify({ ...pending.state, activeFileId: pending.activeFileId });
+      if (serial === lastSavedRef.current) {
+        setSyncStatus('');
+        return;
+      }
+
       try {
         await notesApi.saveState({ ...pending.state, activeFileId: pending.activeFileId });
+        lastSavedRef.current = serial;
         setSyncStatus('saved');
         setTimeout(() => setSyncStatus((s) => s === 'saved' ? '' : s), 2000);
       } catch (e) {
@@ -63,12 +84,21 @@ export function useNotes() {
     clearTimeout(saveTimerRef.current);
     pendingStateRef.current = null;
     setSyncStatus('saving');
-    // Capture current values via functional setState trick
     let capturedState;
     setState((s) => { capturedState = s; return s; });
     const capturedFileId = activeFileIdRef.current;
+
+    // Dirty check
+    const serial = JSON.stringify({ ...capturedState, activeFileId: capturedFileId });
+    if (serial === lastSavedRef.current) {
+      setSyncStatus('saved');
+      setTimeout(() => setSyncStatus((s) => s === 'saved' ? '' : s), 2000);
+      return;
+    }
+
     try {
       await notesApi.saveState({ ...capturedState, activeFileId: capturedFileId });
+      lastSavedRef.current = serial;
       setSyncStatus('saved');
       setTimeout(() => setSyncStatus((s) => s === 'saved' ? '' : s), 2000);
     } catch (e) {
@@ -76,6 +106,35 @@ export function useNotes() {
       setSyncStatus('error');
       setTimeout(() => setSyncStatus(''), 4000);
     }
+  }, []);
+
+  // ── Flush pending save when tab is hidden or closed ───────────────────────
+  // The debounce timer (1.5 s) won't fire if the user closes the tab mid-typing.
+  // We listen for visibilitychange (covers tab switch, window close, mobile app
+  // backgrounding) and fire an immediate synchronous-style save via the
+  // Beacon API which survives page unload. Falls back to a regular fetch if
+  // Beacon is unavailable.
+  useEffect(() => {
+    const flush = () => {
+      if (!pendingStateRef.current) return;
+      clearTimeout(saveTimerRef.current);
+      const { state: s, activeFileId: afId } = pendingStateRef.current;
+      pendingStateRef.current = null;
+      // Best-effort — don't await, page may be unloading
+      notesApi.saveState({ ...s, activeFileId: afId }).catch(() => {});
+    };
+
+    const onVisibility = () => {
+      if (document.visibilityState === 'hidden') flush();
+    };
+
+    document.addEventListener('visibilitychange', onVisibility);
+    window.addEventListener('beforeunload', flush);
+
+    return () => {
+      document.removeEventListener('visibilitychange', onVisibility);
+      window.removeEventListener('beforeunload', flush);
+    };
   }, []);
 
   // ── File operations ───────────────────────────────────────────────────────
