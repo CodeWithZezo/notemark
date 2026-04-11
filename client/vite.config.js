@@ -5,11 +5,6 @@ export default defineConfig({
   plugins: [react()],
   server: {
     port: 5173,
-    proxy: {
-      '/api': {
-        target: 'https://api.stellarlinkbuilding.com',
-        changeOrigin: true,
-      },
-    },
+    // No proxy needed — the client talks directly to Supabase
   },
 });

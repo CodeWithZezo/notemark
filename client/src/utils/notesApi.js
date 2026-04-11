@@ -1,39 +1,61 @@
-const BASE = `${import.meta.env.VITE_API_URL}/api/notes`;
-
-const TIMEOUT_MS = 15_000;
-
-function fetchWithTimeout(url, options = {}) {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
-  return fetch(url, { ...options, signal: controller.signal })
-    .finally(() => clearTimeout(timer));
-}
-
-const headers = (token) => ({
-  'Content-Type': 'application/json',
-  Authorization: `Bearer ${token}`,
-});
+/**
+ * notesApi – thin wrapper around Supabase for note state persistence.
+ *
+ * Row Level Security on public.note_states guarantees that every query
+ * is automatically scoped to the currently authenticated user; no user_id
+ * filter is needed in the queries themselves (Supabase adds it via RLS).
+ */
+import { supabase } from '../lib/supabase';
 
 export const notesApi = {
-  getState: async (token) => {
-    const res = await fetchWithTimeout(BASE, { headers: headers(token) });
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      throw new Error(err.message || 'Failed to load notes');
+  /**
+   * Load the current user's note state.
+   * Returns { files, folders, root, activeFileId } or a default empty state.
+   */
+  getState: async () => {
+    const { data, error } = await supabase
+      .from('note_states')
+      .select('files, folders, root, active_file_id')
+      .maybeSingle(); // returns null (not an error) if no row exists yet
+
+    if (error) throw new Error(error.message);
+
+    if (!data) {
+      return { files: {}, folders: {}, root: [], activeFileId: null };
     }
-    return res.json();
+
+    return {
+      files:        data.files        ?? {},
+      folders:      data.folders      ?? {},
+      root:         data.root         ?? [],
+      activeFileId: data.active_file_id ?? null,
+    };
   },
 
-  saveState: async (token, state) => {
-    const res = await fetchWithTimeout(BASE, {
-      method: 'PUT',
-      headers: headers(token),
-      body: JSON.stringify(state),
-    });
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      throw new Error(err.message || 'Failed to save notes');
-    }
-    return res.json();
+  /**
+   * Upsert the current user's note state.
+   * Supabase's upsert uses the unique constraint on user_id.
+   */
+  saveState: async ({ files, folders, root, activeFileId }) => {
+    // auth.uid() is injected server-side by RLS; we still send user_id
+    // so the insert's with-check policy can match it.
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('Not authenticated.');
+
+    const { error } = await supabase
+      .from('note_states')
+      .upsert(
+        {
+          user_id:        user.id,
+          files:          files   ?? {},
+          folders:        folders ?? {},
+          root:           root    ?? [],
+          active_file_id: activeFileId ?? null,
+        },
+        { onConflict: 'user_id' }
+      );
+
+    if (error) throw new Error(error.message);
+    return { message: 'Saved' };
   },
 };

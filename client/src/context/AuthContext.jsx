@@ -1,66 +1,156 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { supabase } from '../lib/supabase';
 
 const AuthContext = createContext(null);
-const API = `${import.meta.env.VITE_API_URL}/api/auth`;
+
+// Map raw Supabase error strings → clean English messages
+function friendlyError(raw = '') {
+  if (raw.includes('Invalid login credentials'))    return 'Incorrect email or password.';
+  if (raw.includes('Email not confirmed'))          return 'Please verify your email before signing in. Check your inbox.';
+  if (raw.includes('User already registered'))      return 'This email is already registered. Please sign in instead.';
+  if (raw.includes('Password should be at least'))  return 'Password must be at least 6 characters.';
+  if (raw.includes('Unable to validate email'))     return 'Please enter a valid email address.';
+  if (raw.includes('rate limit') || raw.includes('after') || raw.includes('429'))
+                                                    return 'Too many attempts. Please wait a moment and try again.';
+  if (raw.includes('popup_closed'))                return 'Sign-in popup was closed. Please try again.';
+  if (raw.includes('provider is not enabled'))     return 'This sign-in method is not enabled. Contact support.';
+  if (raw.includes('Network'))                     return 'Network error. Please check your connection and try again.';
+  return raw || 'Something went wrong. Please try again.';
+}
 
 export function AuthProvider({ children }) {
-  const [user, setUser]       = useState(null);
-  const [token, setToken]     = useState(() => localStorage.getItem('nm_token'));
-  const [loading, setLoading] = useState(true);
+  const [user, setUser]                                   = useState(null);
+  const [loading, setLoading]                             = useState(true);
+  const [pendingVerification, setPendingVerification]     = useState(null); // { email }
+  const [oauthLoading, setOauthLoading]                   = useState(null); // 'google' | 'github' | null
 
-  // Stable logout (no deps — doesn't change between renders)
-  const logout = useCallback(() => {
-    localStorage.removeItem('nm_token');
-    setToken(null);
-    setUser(null);
-  }, []);
-
-  // Validate stored token on mount
+  // ── Session sync ──────────────────────────────────────────────────────
   useEffect(() => {
-    if (!token) { setLoading(false); return; }
-    let cancelled = false;
-    fetch(`${API}/me`, { headers: { Authorization: `Bearer ${token}` } })
-      .then(r => r.json())
-      .then(data => {
-        if (cancelled) return;
-        if (data.user) setUser(data.user);
-        else logout();
-      })
-      .catch(() => { if (!cancelled) logout(); })
-      .finally(() => { if (!cancelled) setLoading(false); });
-    return () => { cancelled = true; };
-  }, []); // intentionally run once on mount only — logout is stable
-
-  const login = useCallback(async (email, password) => {
-    const res = await fetch(`${API}/login`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password }),
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setUser(session?.user ?? null);
+      setLoading(false);
     });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.message || 'Login failed');
-    localStorage.setItem('nm_token', data.token);
-    setToken(data.token);
-    setUser(data.user);
-    return data;
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      setUser(session?.user ?? null);
+      if (event === 'SIGNED_IN' || event === 'USER_UPDATED') {
+        setPendingVerification(null);
+        setOauthLoading(null);
+      }
+    });
+
+    return () => subscription.unsubscribe();
   }, []);
 
+  // ── Email / Password Register ─────────────────────────────────────────
   const register = useCallback(async (username, email, password) => {
-    const res = await fetch(`${API}/register`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username, email, password }),
+    if (!username || username.trim().length < 3 || username.trim().length > 30) {
+      throw new Error('Username must be between 3 and 30 characters.');
+    }
+
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        data: { username: username.trim() },
+        emailRedirectTo: window.location.origin,
+      },
     });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.message || 'Registration failed');
-    localStorage.setItem('nm_token', data.token);
-    setToken(data.token);
-    setUser(data.user);
+
+    if (error) throw new Error(friendlyError(error.message));
+
+    // session is null when email confirmation is required
+    if (data.user && !data.session) {
+      setPendingVerification({ email });
+    }
+
     return data;
   }, []);
+
+  // ── Email / Password Login ────────────────────────────────────────────
+  const login = useCallback(async (email, password) => {
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) throw new Error(friendlyError(error.message));
+    return data;
+  }, []);
+
+  // ── Google OAuth ──────────────────────────────────────────────────────
+  const signInWithGoogle = useCallback(async () => {
+    setOauthLoading('google');
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: {
+        redirectTo: window.location.origin,
+        queryParams: { prompt: 'select_account' }, // always show account picker
+      },
+    });
+    if (error) {
+      setOauthLoading(null);
+      throw new Error(friendlyError(error.message));
+    }
+    // Browser will redirect — oauthLoading stays until redirect
+  }, []);
+
+  // ── GitHub OAuth ──────────────────────────────────────────────────────
+  const signInWithGitHub = useCallback(async () => {
+    setOauthLoading('github');
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: 'github',
+      options: { redirectTo: window.location.origin },
+    });
+    if (error) {
+      setOauthLoading(null);
+      throw new Error(friendlyError(error.message));
+    }
+  }, []);
+
+  // ── Resend verification email ─────────────────────────────────────────
+  const resendVerification = useCallback(async (email) => {
+    const { error } = await supabase.auth.resend({
+      type: 'signup',
+      email,
+      options: { emailRedirectTo: window.location.origin },
+    });
+    if (error) throw new Error(friendlyError(error.message));
+  }, []);
+
+  // ── Logout ────────────────────────────────────────────────────────────
+  const logout = useCallback(async () => {
+    await supabase.auth.signOut();
+    setPendingVerification(null);
+    setOauthLoading(null);
+  }, []);
+
+  const cancelVerification = useCallback(() => {
+    setPendingVerification(null);
+  }, []);
+
+  const userShape = user
+    ? {
+        id:         user.id,
+        email:      user.email,
+        username:   user.user_metadata?.username
+                    ?? user.user_metadata?.full_name
+                    ?? user.user_metadata?.name
+                    ?? user.email.split('@')[0],
+        avatar:     user.user_metadata?.avatar_url ?? null,
+      }
+    : null;
 
   return (
-    <AuthContext.Provider value={{ user, token, loading, login, register, logout }}>
+    <AuthContext.Provider value={{
+      user: userShape,
+      loading,
+      oauthLoading,
+      pendingVerification,
+      login,
+      register,
+      logout,
+      signInWithGoogle,
+      signInWithGitHub,
+      resendVerification,
+      cancelVerification,
+    }}>
       {children}
     </AuthContext.Provider>
   );

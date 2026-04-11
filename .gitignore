@@ -1,4 +1,23 @@
-.env
+# Dependencies
 node_modules/
+
+# Build output
 dist/
 build/
+
+# Environment variables — never commit these
+.env
+.env.local
+.env.*.local
+
+# Supabase local dev (if using supabase CLI)
+supabase/.branches
+supabase/.temp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/

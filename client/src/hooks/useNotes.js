@@ -5,7 +5,7 @@ function uid() { return Math.random().toString(36).slice(2, 10); }
 
 const EMPTY_STATE = { files: {}, folders: {}, root: [] };
 
-export function useNotes(token) {
+export function useNotes() {
   const [state, setState]           = useState(EMPTY_STATE);
   const [activeFileId, setActiveFileId] = useState(null);
   const [loading, setLoading]       = useState(true);
@@ -19,9 +19,9 @@ export function useNotes(token) {
 
   // ── Load state on mount ──────────────────────────────────────────────────
   useEffect(() => {
-    if (!token) { setLoading(false); return; }
+    // Supabase session is managed internally — no token prop needed
     let cancelled = false;
-    notesApi.getState(token)
+    notesApi.getState()
       .then((data) => {
         if (cancelled) return;
         setState({ files: data.files || {}, folders: data.folders || {}, root: data.root || [] });
@@ -30,7 +30,7 @@ export function useNotes(token) {
       .catch((err) => { if (!cancelled) console.error('Failed to load notes:', err); })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, [token]);
+  }, []);
 
   // ── Cleanup timer on unmount ─────────────────────────────────────────────
   useEffect(() => {
@@ -47,7 +47,7 @@ export function useNotes(token) {
       if (!pending) return;
       pendingStateRef.current = null;
       try {
-        await notesApi.saveState(token, { ...pending.state, activeFileId: pending.activeFileId });
+        await notesApi.saveState({ ...pending.state, activeFileId: pending.activeFileId });
         setSyncStatus('saved');
         setTimeout(() => setSyncStatus((s) => s === 'saved' ? '' : s), 2000);
       } catch (e) {
@@ -56,7 +56,7 @@ export function useNotes(token) {
         setTimeout(() => setSyncStatus(''), 4000);
       }
     }, 1500);
-  }, [token]);
+  }, []);
 
   // ── Manual save ───────────────────────────────────────────────────────────
   const saveNow = useCallback(async () => {
@@ -68,7 +68,7 @@ export function useNotes(token) {
     setState((s) => { capturedState = s; return s; });
     const capturedFileId = activeFileIdRef.current;
     try {
-      await notesApi.saveState(token, { ...capturedState, activeFileId: capturedFileId });
+      await notesApi.saveState({ ...capturedState, activeFileId: capturedFileId });
       setSyncStatus('saved');
       setTimeout(() => setSyncStatus((s) => s === 'saved' ? '' : s), 2000);
     } catch (e) {
@@ -76,7 +76,7 @@ export function useNotes(token) {
       setSyncStatus('error');
       setTimeout(() => setSyncStatus(''), 4000);
     }
-  }, [token]);
+  }, []);
 
   // ── File operations ───────────────────────────────────────────────────────
   const newFile = useCallback((parentFolderId = null, name = 'Untitled') => {

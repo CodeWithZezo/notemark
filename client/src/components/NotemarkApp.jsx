@@ -8,14 +8,14 @@ import Modal from './Modal';
 import ContextMenu from './ContextMenu';
 
 export default function NotemarkApp() {
-  const { user, token, logout } = useAuth();
+  const { user, logout } = useAuth();
   const {
     state, activeFileId, loading, syncStatus,
     newFile, newFolder, openFile,
     updateFileContent, updateFileTitle,
     toggleFolder, renameItem, deleteItem, moveItem,
     saveNow,
-  } = useNotes(token);
+  } = useNotes();
 
   const [isPreviewing, setIsPreviewing]       = useState(false);
   const [editorValue, setEditorValue]         = useState('');
